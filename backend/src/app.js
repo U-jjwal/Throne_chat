@@ -27,7 +27,9 @@ app.use(async (req, res, next) => {
     next();
 })
 
+import authRouter from './routes/auth.routers.js';
 
+app.use("/api/v1/auth", authRouter);
 
 
 
