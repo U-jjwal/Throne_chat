@@ -12,4 +12,6 @@ router.route("/login").post(login)
 
 router.route('/logout').post(authenticateToken,logout)
 
+router.route('/users').get(getUsers);
+
 export default router;
