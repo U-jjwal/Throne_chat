@@ -1,23 +1,35 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const groupChatSchema = new mongoose.Schema({
+const groupChatSchema = new mongoose.Schema(
+  {
     isGroupChat: {
-
+      type: Boolean,
+      default: false,
     },
-    participants: [{
-
-    }],
-    groupName: String,
-    groupAvatar: {
-        public_id: String,
-        url: String,
-    },
-    groupadmin: {
+    participants: [
+      {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+      },
+    ],
+    groupName: {
+      type: String,
+      trim: true,
     },
-    latestMessage: [],
-    }
-, {timestamps: true});
+    groupAvatar: {
+      public_id: String,
+      url: String,
+    },
+    groupadmin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    latestMessage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+    },
+  },
+  { timestamps: true }
+);
 
 export const GroupChat = mongoose.model("GroupChat", groupChatSchema);
