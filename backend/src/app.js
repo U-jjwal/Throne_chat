@@ -1,10 +1,10 @@
-import express from 'express';
 import dotenv from 'dotenv';
+dotenv.config();
+import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import connectDb from './db/index.js';
 
-dotenv.config();
 
 
 const app = express();
@@ -22,10 +22,7 @@ app.get('/', (req, res) => {
     res.send("Working");
 })
 
-app.use(async (req, res, next) => {
-    await connectDb();
-    next();
-})
+
 
 import authRouter from './routes/auth.routers.js';
 

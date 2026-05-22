@@ -1,6 +1,10 @@
 import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const transporter = nodemailer.createTransport({
+
     service: "gmail",
 
     auth: {
@@ -9,24 +13,45 @@ const transporter = nodemailer.createTransport({
     },
 });
 
+transporter.verify((error, success) => {
+
+    if (error) {
+
+        console.log("Transport Error:", error);
+
+    } else {
+
+        console.log("Mail Server Ready");
+    }
+});
+
 export const sendOtpMail = async (email, otp) => {
 
-    await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+    try {
 
-        to: email,
+        const info = await transporter.sendMail({
 
-        subject: "Verification OTP for Throne Chat",
+            from: process.env.EMAIL_USER,
 
-        html: `
-            <h2>Email Verification</h2>
+            to: email,
 
-            <p>Your OTP is:</p>
+            subject: "Verification OTP for Throne Chat",
 
-            <h1>${otp}</h1>
+            html: `
+                <h2>Email Verification For Throne Chat</h2>
 
-            <p>This OTP expires in 5 minutes.</p>
-        `,
-    });
+                <p>Your OTP is:</p>
 
+                <h1>${otp}</h1>
+
+                <p>This OTP expires in 5 minutes.</p>
+            `,
+        });
+
+        console.log("Email Sent:", info.response);
+
+    } catch (error) {
+
+        console.log("Mail Error:", error);
+    }
 };
