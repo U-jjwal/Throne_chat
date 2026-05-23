@@ -1,10 +1,10 @@
 import Redis from "ioredis";
 
 // Autodetect if a valid production Redis URL is supplied (bypasses placeholders like 'host' or 'placeholder')
-const useRedis = process.env.REDIS_URL && 
-                 !process.env.REDIS_URL.includes("host") && 
-                 !process.env.REDIS_URL.includes("placeholder") &&
-                 process.env.REDIS_URL !== "undefined";
+const useRedis = process.env.REDIS_URL &&
+    !process.env.REDIS_URL.includes("host") &&
+    !process.env.REDIS_URL.includes("placeholder") &&
+    process.env.REDIS_URL !== "undefined";
 
 const client = useRedis ? new Redis(
     process.env.REDIS_URL,
