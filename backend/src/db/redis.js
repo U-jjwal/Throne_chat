@@ -65,6 +65,25 @@ export const redis = {
         }
     },
 
+    async setex(key, seconds, value) {
+        if (!client) {
+            memoryStore.set(key, value);
+            setTimeout(() => {
+                memoryStore.delete(key);
+            }, seconds * 1000);
+            return "OK";
+        }
+        try {
+            return await client.setex(key, seconds, value);
+        } catch (err) {
+            memoryStore.set(key, value);
+            setTimeout(() => {
+                memoryStore.delete(key);
+            }, seconds * 1000);
+            return "OK";
+        }
+    },
+
     async get(key) {
         if (!client) {
             return memoryStore.get(key) || null;
