@@ -1,54 +1,46 @@
 import nodemailer from "nodemailer";
-import dotenv from "dotenv";
 
-dotenv.config();
-
-// gmail smtp config
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // true for port 465 (SSL)
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  connectionTimeout: 5000, // 5 seconds timeout
-  greetingTimeout: 5000,
-  socketTimeout: 5000,
+export const transporter = nodemailer.createTransport({
+    host: "smtp-relay.brevo.com",
+    port: 587,
+    secure: false,
+    auth: {
+        user: process.env.BREVO_EMAIL,
+        pass: process.env.BREVO_SMTP_KEY,
+    },
+    connectionTimeout: 5000, // 5 seconds connection timeout
+    greetingTimeout: 5000,
+    socketTimeout: 5000,
 });
 
-// verify mail server is ready
-transporter.verify((error, success) => {
-  if (error) {
-    console.log("Transport Error:", error);
-  } else {
-    console.log("Mail Server Ready");
-  }
+transporter.verify((error) => {
+    if (error) {
+        console.log("❌ SMTP Error:", error.message);
+    } else {
+        console.log("✅ Mail Server Ready");
+    }
 });
 
-// send otp email to user
 export const sendOtpMail = async (email, otp) => {
-  try {
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Verification OTP for Chat App",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Email Verification</h2>
-          <p>Your OTP for account verification is:</p>
-          <h1 style="color: #4F46E5; font-size: 32px;">${otp}</h1>
-          <p>This OTP expires in <strong>5 minutes</strong>.</p>
-          <hr />
-          <p style="color: #666; font-size: 12px;">If you didn't request this, please ignore this email.</p>
-        </div>
-      `,
-    });
-    console.log("Email Sent:", info.messageId);
-    return true;
-  } catch (error) {
-    console.log("⚠️ SMTP Email Server failed or not configured:", error.message);
-    console.log("🔑 [TEST ONLY] Live OTP generated for register:", otp);
-    return true; // Return true to allow registration flow to succeed in dev/sandbox modes!
-  }
+    try {
+        await transporter.sendMail({
+            from: process.env.BREVO_EMAIL,
+            to: email,
+            subject: "Throne Chat OTP",
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e5e5ea; border-radius: 8px; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #333;">Email Verification</h2>
+                    <p>Welcome to Throne Chat! Your account verification OTP is:</p>
+                    <h1 style="color: #6362E8; font-size: 32px; letter-spacing: 2px;">${otp}</h1>
+                    <p>This OTP will expire in <strong>5 minutes</strong>.</p>
+                    <hr style="border: none; border-top: 1px solid #e5e5ea;" />
+                    <p style="color: #8e8e93; font-size: 12px;">If you didn't request this, you can safely ignore this email.</p>
+                </div>
+            `,
+        });
+        console.log("✅ OTP Email Sent");
+    } catch (error) {
+        console.log("❌ Mail Error:", error.message);
+        console.log("🔑 [TEST ONLY] Live OTP generated for register:", otp);
+    }
 };
