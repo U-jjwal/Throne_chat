@@ -139,7 +139,15 @@ export default function ChatScreen({ navigation }) {
     });
 
     newSocket.on('message_sent', (message) => {
-      setMessages(prev => prev.find(m => m._id === message._id) ? prev : [...prev, message]);
+      setMessages(prev => {
+        const index = prev.findIndex(m => (message.tempId && m._id === message.tempId) || m._id === message._id);
+        if (index !== -1) {
+          const updated = [...prev];
+          updated[index] = message;
+          return updated;
+        }
+        return [...prev, message];
+      });
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     });
 
@@ -207,23 +215,42 @@ export default function ChatScreen({ navigation }) {
   };
 
   const handleSendMessage = () => {
-    if (!inputMessage.trim() || !selectedChat || sending) return;
+    if (!inputMessage.trim() || !selectedChat) return;
     if (!socket?.connected) {
       Alert.alert('Error', 'Not connected to server');
       return;
     }
 
-    setSending(true);
     const messageText = inputMessage;
     setInputMessage('');
+
+    // Generate a temporary unique ID for instantaneous UI display
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage = {
+      _id: tempId,
+      chatId: selectedChat._id,
+      senderId: {
+        _id: currentUser?._id,
+        fullName: currentUser?.fullName,
+        avatar: currentUser?.avatar,
+      },
+      text: messageText,
+      media: "",
+      messageType: 'text',
+      status: 'sending',
+      createdAt: new Date().toISOString(),
+    };
+
+    // Append message to UI instantly
+    setMessages(prev => [...prev, optimisticMessage]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
 
     socket.emit('send_message', {
       chatId: selectedChat._id,
       text: messageText,
       messageType: 'text',
+      tempId,
     });
-
-    setTimeout(() => setSending(false), 500);
   };
   const handlePickAndUploadFile = async () => {
     // Request system permissions to pick media

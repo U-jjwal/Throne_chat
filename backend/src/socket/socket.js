@@ -90,7 +90,7 @@ export const initializeSocket = (io) => {
     // send message
     socket.on("send_message", async (data) => {
       try {
-        const { chatId, text, media, messageType = "text" } = data;
+        const { chatId, text, media, messageType = "text", tempId } = data;
         const senderId = socket.user.userId;
 
         // check if chat exists
@@ -123,12 +123,15 @@ export const initializeSocket = (io) => {
         // update latest message in chat
         await GroupChat.findByIdAndUpdate(chatId, { latestMessage: message._id });
 
-        // send back to sender
-        socket.emit("message_sent", message);
+        // send back to sender with optimistic tempId attached
+        socket.emit("message_sent", {
+          ...message.toObject(),
+          tempId,
+        });
 
-        // send to all other participants who are online
+        // send to all other participants who are online in parallel
         let deliveredCount = 0;
-        for (const participantId of chat.participants) {
+        await Promise.all(chat.participants.map(async (participantId) => {
           if (participantId.toString() !== senderId) {
             const participantSocketId = await redis.get(`socket:${participantId}`);
             if (participantSocketId) {
@@ -139,19 +142,22 @@ export const initializeSocket = (io) => {
               io.to(participantSocketId).emit("receive_message", message);
             }
           }
-        }
+        }));
 
         // if delivered to at least one, update status
         if (deliveredCount > 0) {
           message.status = "delivered";
-          await message.save();
+        }
+
+        // Just one single database save instead of double sequential saves
+        await message.save();
+
+        if (deliveredCount > 0) {
           socket.emit("message_delivered", {
             messageId: message._id,
             chatId: message.chatId,
           });
         }
-
-        await message.save();
       } catch (error) {
         console.error("Send message error:", error);
         socket.emit("error", { message: "Failed to send message" });
@@ -169,15 +175,16 @@ export const initializeSocket = (io) => {
         if (!message.readBy.map(String).includes(userId)) {
           message.readBy.push(userId);
           message.status = "read";
-          await message.save();
 
           // also mark as delivered if not already
           if (!message.deliveredTo.map(String).includes(userId)) {
             message.deliveredTo.push(userId);
-            await message.save();
           }
 
-          // notify sender about read receipt
+          // Non-blocking database write in the background
+          message.save().catch((err) => console.error("Error saving read status:", err));
+
+          // notify sender about read receipt concurrently
           const senderSocketId = await redis.get(`socket:${message.senderId}`);
           if (senderSocketId) {
             io.to(senderSocketId).emit("message_read", {
@@ -193,7 +200,7 @@ export const initializeSocket = (io) => {
       }
     });
 
-    // mark all messages in a chat as read
+    // mark all messages in a chat as read in one concurrent parallel execution
     socket.on("mark_chat_read", async ({ chatId }) => {
       try {
         const userId = socket.user.userId;
@@ -205,7 +212,10 @@ export const initializeSocket = (io) => {
           senderId: { $ne: userId },
         });
 
-        for (const message of unreadMessages) {
+        if (unreadMessages.length === 0) return;
+
+        // Process all updates in parallel
+        await Promise.all(unreadMessages.map(async (message) => {
           if (!message.readBy.map(String).includes(userId)) {
             message.readBy.push(userId);
 
@@ -215,20 +225,25 @@ export const initializeSocket = (io) => {
             }
 
             message.status = "read";
-            await message.save();
+            
+            // Fire save and notification concurrently
+            const savePromise = message.save().catch((err) => console.error("Error batch saving read status:", err));
+            
+            const notifyPromise = (async () => {
+              const senderSocketId = await redis.get(`socket:${message.senderId}`);
+              if (senderSocketId) {
+                io.to(senderSocketId).emit("message_read", {
+                  messageId: message._id,
+                  chatId: chatId,
+                  readBy: userId,
+                  readAt: new Date(),
+                });
+              }
+            })();
 
-            // notify sender
-            const senderSocketId = await redis.get(`socket:${message.senderId}`);
-            if (senderSocketId) {
-              io.to(senderSocketId).emit("message_read", {
-                messageId: message._id,
-                chatId: chatId,
-                readBy: userId,
-                readAt: new Date(),
-              });
-            }
+            await Promise.all([savePromise, notifyPromise]);
           }
-        }
+        }));
 
         // handle messages that are sent but not delivered yet
         const deliveredMessages = await Message.find({
