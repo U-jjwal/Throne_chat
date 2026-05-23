@@ -22,7 +22,7 @@ export const initializeSocket = (io) => {
 
   io.on("connection", async (socket) => {
     const userId = socket.user.userId;
-    console.log("🟢 User Connected:", userId);
+    console.log("User Connected:", userId);
 
     // save socket id in redis
     await redis.set(`socket:${userId}`, socket.id);
@@ -311,7 +311,7 @@ export const initializeSocket = (io) => {
 
     // user disconnected
     socket.on("disconnect", async () => {
-      console.log("🔴 User Disconnected:", userId);
+      console.log("User Disconnected:", userId);
 
       // cleanup redis
       await redis.del(`socket:${userId}`);

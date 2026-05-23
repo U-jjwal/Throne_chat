@@ -26,25 +26,25 @@ if (client) {
     client.on(
         "connect",
         () => {
-            console.log("✅ Redis Server Connected");
+            console.log("Redis Server Connected");
         }
     );
 
     client.on(
         "ready",
         () => {
-            console.log("✅ Redis Server Ready");
+            console.log("Redis Server Ready");
         }
     );
 
     client.on(
         "error",
         (err) => {
-            console.log("⚠️ Redis Server Connection Error:", err.message);
+            console.log("Redis Server Connection Error:", err.message);
         }
     );
 } else {
-    console.log("ℹ️ Redis URL not set or placeholder detected. Safe In-Memory coordination active from startup!");
+    console.log("ℹRedis URL not set or placeholder detected. Safe In-Memory coordination active from startup!");
 }
 
 // Local in-memory fallback stores (Used when Redis is disabled or connection fails)

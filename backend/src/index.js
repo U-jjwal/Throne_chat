@@ -34,7 +34,7 @@ app.use(cookieParser());
 
 // connect to databases
 connectDb();
-redis.ping().then(() => console.log("✅ Redis connected")).catch(console.error);
+redis.ping().then(() => console.log("Redis connected")).catch(console.error);
 
 // routes
 import authRoutes from "./routes/auth.routes.js";
