@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 // 1. Direct HTTP API send using Brevo (completely bypasses Railway SMTP block!)
 const sendViaBrevoAPI = async (email, otp) => {
     const apiKey = process.env.BREVO_API_KEY;
-    const senderEmail = process.env.BREVO_EMAIL || "ac48a8001@smtp-brevo.com";
+    const senderEmail = process.env.BREVO_EMAIL || "laptopplapii@gmail.com";
     if (!apiKey) return false;
 
     try {
