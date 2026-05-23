@@ -42,7 +42,7 @@ const sendViaBrevoAPI = async (email, otp) => {
 
         if (response.ok) {
             const data = await response.json();
-            console.log("✅ Email Sent via Brevo HTTP API:", data.messageId);
+            console.log(`✅ Email Sent via Brevo HTTP API! (Live OTP generated: ${otp})`, data.messageId);
             return true;
         }
         const errData = await response.json();
@@ -97,7 +97,7 @@ export const sendOtpMail = async (email, otp) => {
                     </div>
                 `,
             });
-            console.log("✅ OTP Email Sent via SMTP");
+            console.log(`✅ OTP Email Sent via SMTP! (Live OTP generated: ${otp})`);
             return true;
         } catch (error) {
             console.log("❌ Mail SMTP Error:", error.message);
