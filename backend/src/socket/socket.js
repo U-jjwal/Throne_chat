@@ -5,7 +5,7 @@ import { GroupChat } from "../models/groupChat.model.js";
 import { User } from "../models/user.model.js";
 
 export const initializeSocket = (io) => {
-  // Socket authentication middleware
+  // authenticate socket connection
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token;
@@ -24,22 +24,247 @@ export const initializeSocket = (io) => {
     const userId = socket.user.userId;
     console.log("🟢 User Connected:", userId);
 
-    // Store socket ID
+    // save socket id in redis
     await redis.set(`socket:${userId}`, socket.id);
 
-    // Add to online users
+    // mark user online
     await redis.sadd("online_users", userId);
-    await User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() });
+    await User.findByIdAndUpdate(userId, {
+      isOnline: true,
+      lastSeen: new Date(),
+    });
 
-    // Get all online users and broadcast
+    // broadcast online users to everyone
     const onlineUsers = await redis.smembers("online_users");
     io.emit("online_users", onlineUsers);
 
-    // Join user's personal room for direct messages
-    socket.join(`user:${userId}`);
+    // get all chats this user is part of
+    const userChats = await GroupChat.find({ participants: userId });
+    const chatIds = userChats.map((chat) => chat._id);
 
-    // ==================== TYPING INDICATOR ====================
+    // find messages that were not delivered while user was offline
+    const undeliveredMessages = await Message.find({
+      chatId: { $in: chatIds },
+      deliveredTo: { $ne: userId },
+      senderId: { $ne: userId },
+    });
+
+    // mark them as delivered and send to user
+    for (const message of undeliveredMessages) {
+      if (!message.deliveredTo.map(String).includes(userId)) {
+        message.deliveredTo.push(userId);
+
+        if (message.status === "sent") {
+          message.status = "delivered";
+          await message.save();
+
+          // notify sender about delivery
+          const senderSocketId = await redis.get(`socket:${message.senderId}`);
+          if (senderSocketId) {
+            io.to(senderSocketId).emit("message_delivered", {
+              messageId: message._id,
+              chatId: message.chatId,
+            });
+          }
+        }
+
+        // send message to this user
+        await message.populate("senderId", "fullName avatar");
+        socket.emit("receive_message", message);
+      }
+    }
+
+    // find delivered but unread messages and send them
+    const unreadMessages = await Message.find({
+      chatId: { $in: chatIds },
+      readBy: { $ne: userId },
+      senderId: { $ne: userId },
+      status: "delivered",
+    });
+
+    for (const message of unreadMessages) {
+      await message.populate("senderId", "fullName avatar");
+      socket.emit("receive_message", message);
+    }
+
+    // send message
+    socket.on("send_message", async (data) => {
+      try {
+        const { chatId, text, media, messageType = "text" } = data;
+        const senderId = socket.user.userId;
+
+        // check if chat exists
+        const chat = await GroupChat.findById(chatId);
+        if (!chat) {
+          socket.emit("error", { message: "Chat not found" });
+          return;
+        }
+
+        // check if user is a participant
+        if (!chat.participants.map(String).includes(senderId)) {
+          socket.emit("error", { message: "Not a participant" });
+          return;
+        }
+
+        // create message in db
+        const message = await Message.create({
+          chatId,
+          senderId,
+          text: text || "",
+          media: media || "",
+          messageType,
+          deliveredTo: [senderId],
+          readBy: [senderId],
+          status: "sent",
+        });
+
+        await message.populate("senderId", "fullName avatar");
+
+        // update latest message in chat
+        await GroupChat.findByIdAndUpdate(chatId, { latestMessage: message._id });
+
+        // send back to sender
+        socket.emit("message_sent", message);
+
+        // send to all other participants who are online
+        let deliveredCount = 0;
+        for (const participantId of chat.participants) {
+          if (participantId.toString() !== senderId) {
+            const participantSocketId = await redis.get(`socket:${participantId}`);
+            if (participantSocketId) {
+              if (!message.deliveredTo.map(String).includes(participantId)) {
+                message.deliveredTo.push(participantId);
+                deliveredCount++;
+              }
+              io.to(participantSocketId).emit("receive_message", message);
+            }
+          }
+        }
+
+        // if delivered to at least one, update status
+        if (deliveredCount > 0) {
+          message.status = "delivered";
+          await message.save();
+          socket.emit("message_delivered", {
+            messageId: message._id,
+            chatId: message.chatId,
+          });
+        }
+
+        await message.save();
+      } catch (error) {
+        console.error("Send message error:", error);
+        socket.emit("error", { message: "Failed to send message" });
+      }
+    });
+
+    // mark single message as read
+    socket.on("mark_read", async ({ messageId, chatId }) => {
+      try {
+        const userId = socket.user.userId;
+
+        const message = await Message.findById(messageId);
+        if (!message) return;
+
+        if (!message.readBy.map(String).includes(userId)) {
+          message.readBy.push(userId);
+          message.status = "read";
+          await message.save();
+
+          // also mark as delivered if not already
+          if (!message.deliveredTo.map(String).includes(userId)) {
+            message.deliveredTo.push(userId);
+            await message.save();
+          }
+
+          // notify sender about read receipt
+          const senderSocketId = await redis.get(`socket:${message.senderId}`);
+          if (senderSocketId) {
+            io.to(senderSocketId).emit("message_read", {
+              messageId,
+              chatId,
+              readBy: userId,
+              readAt: new Date(),
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Mark read error:", error);
+      }
+    });
+
+    // mark all messages in a chat as read
+    socket.on("mark_chat_read", async ({ chatId }) => {
+      try {
+        const userId = socket.user.userId;
+
+        // find all unread messages in this chat
+        const unreadMessages = await Message.find({
+          chatId: chatId,
+          readBy: { $ne: userId },
+          senderId: { $ne: userId },
+        });
+
+        for (const message of unreadMessages) {
+          if (!message.readBy.map(String).includes(userId)) {
+            message.readBy.push(userId);
+
+            // also mark delivered
+            if (!message.deliveredTo.map(String).includes(userId)) {
+              message.deliveredTo.push(userId);
+            }
+
+            message.status = "read";
+            await message.save();
+
+            // notify sender
+            const senderSocketId = await redis.get(`socket:${message.senderId}`);
+            if (senderSocketId) {
+              io.to(senderSocketId).emit("message_read", {
+                messageId: message._id,
+                chatId: chatId,
+                readBy: userId,
+                readAt: new Date(),
+              });
+            }
+          }
+        }
+
+        // handle messages that are sent but not delivered yet
+        const deliveredMessages = await Message.find({
+          chatId: chatId,
+          deliveredTo: { $ne: userId },
+          senderId: { $ne: userId },
+          status: { $in: ["sent", "delivered"] },
+        });
+
+        for (const message of deliveredMessages) {
+          if (!message.deliveredTo.map(String).includes(userId)) {
+            message.deliveredTo.push(userId);
+
+            if (message.status !== "read") {
+              message.status = "delivered";
+            }
+            await message.save();
+
+            // notify sender about delivery
+            const senderSocketId = await redis.get(`socket:${message.senderId}`);
+            if (senderSocketId) {
+              io.to(senderSocketId).emit("message_delivered", {
+                messageId: message._id,
+                chatId: chatId,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Mark chat read error:", error);
+      }
+    });
+
+    // typing indicator
     socket.on("typing", async ({ chatId, receiverId, isTyping }) => {
+      // if direct chat, send to specific user
       if (receiverId) {
         const receiverSocketId = await redis.get(`socket:${receiverId}`);
         if (receiverSocketId) {
@@ -49,8 +274,8 @@ export const initializeSocket = (io) => {
             isTyping,
           });
         }
+      // if group chat, send to all participants
       } else if (chatId) {
-        // For group chats, emit to all participants except sender
         const chat = await GroupChat.findById(chatId);
         if (chat) {
           for (const participant of chat.participants) {
@@ -69,158 +294,30 @@ export const initializeSocket = (io) => {
       }
     });
 
-    // ==================== SEND MESSAGE ====================
-    socket.on("send_message", async (data) => {
-      try {
-        const { chatId, text, media, messageType = "text" } = data;
-        const senderId = socket.user.userId;
-
-        // Get chat details
-        const chat = await GroupChat.findById(chatId);
-        if (!chat) {
-          socket.emit("error", { message: "Chat not found" });
-          return;
-        }
-
-        // Check if sender is a participant
-        if (!chat.participants.map(String).includes(senderId)) {
-          socket.emit("error", { message: "Not a participant" });
-          return;
-        }
-
-        // Create message
-        const message = await Message.create({
-          chatId,
-          senderId,
-          text: text || "",
-          media: media || "",
-          messageType,
-          deliveredTo: [senderId],
-          readBy: [senderId],
-          status: "sent",
-        });
-
-        // Populate sender info
-        await message.populate("senderId", "fullName avatar");
-
-        // Update latest message in chat
-        await GroupChat.findByIdAndUpdate(chatId, { latestMessage: message._id });
-
-        // Send to all participants
-        const deliveryPromises = [];
-        for (const participantId of chat.participants) {
-          const participantSocketId = await redis.get(`socket:${participantId}`);
-          if (participantSocketId) {
-            // Mark as delivered for online participants
-            if (participantId.toString() !== senderId) {
-              if (!message.deliveredTo.map(String).includes(participantId)) {
-                message.deliveredTo.push(participantId);
-              }
-            }
-            io.to(participantSocketId).emit("receive_message", message);
-          }
-        }
-
-        // Update delivered status
-        await message.save();
-
-        // Send confirmation to sender
-        socket.emit("message_sent", message);
-
-        // Emit delivered update to sender
-        socket.emit("message_delivered", { messageId: message._id });
-      } catch (error) {
-        console.error("Send message error:", error);
-        socket.emit("error", { message: "Failed to send message" });
-      }
-    });
-
-    // ==================== READ RECEIPT ====================
-    socket.on("mark_read", async ({ messageId, chatId }) => {
-      try {
-        const userId = socket.user.userId;
-
-        const message = await Message.findById(messageId);
-        if (!message) return;
-
-        // Mark as read
-        if (!message.readBy.map(String).includes(userId)) {
-          message.readBy.push(userId);
-          message.status = "read";
-          await message.save();
-        }
-
-        // Mark as delivered if not already
-        if (!message.deliveredTo.map(String).includes(userId)) {
-          message.deliveredTo.push(userId);
-          await message.save();
-        }
-
-        // Notify sender that message was read
-        const senderSocketId = await redis.get(`socket:${message.senderId}`);
-        if (senderSocketId) {
-          io.to(senderSocketId).emit("message_read", {
-            messageId,
-            chatId,
-            readBy: userId,
-          });
-        }
-      } catch (error) {
-        console.error("Mark read error:", error);
-      }
-    });
-
-    // ==================== MARK ALL MESSAGES AS READ IN CHAT ====================
-    socket.on("mark_chat_read", async ({ chatId }) => {
-      try {
-        const userId = socket.user.userId;
-
-        const messages = await Message.find({
-          chatId,
-          readBy: { $ne: userId },
-        });
-
-        for (const message of messages) {
-          message.readBy.push(userId);
-          if (!message.deliveredTo.map(String).includes(userId)) {
-            message.deliveredTo.push(userId);
-          }
-          message.status = "read";
-          await message.save();
-
-          // Notify sender
-          const senderSocketId = await redis.get(`socket:${message.senderId}`);
-          if (senderSocketId) {
-            io.to(senderSocketId).emit("message_read", {
-              messageId: message._id,
-              chatId,
-              readBy: userId,
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Mark chat read error:", error);
-      }
-    });
-
-    // ==================== DISCONNECT ====================
+    // user disconnected
     socket.on("disconnect", async () => {
       console.log("🔴 User Disconnected:", userId);
 
-      // Remove socket
+      // cleanup redis
       await redis.del(`socket:${userId}`);
       await redis.srem("online_users", userId);
 
-      // Update last seen
+      // update last seen in db
+      const lastSeen = new Date();
       await User.findByIdAndUpdate(userId, {
         isOnline: false,
-        lastSeen: new Date(),
+        lastSeen: lastSeen,
       });
-      await redis.set(`lastSeen:${userId}`, Date.now());
+      await redis.set(`lastSeen:${userId}`, lastSeen.getTime());
 
-      // Broadcast updated online users
+      // broadcast updated online users
       const updatedUsers = await redis.smembers("online_users");
       io.emit("online_users", updatedUsers);
     });
   });
 };
+
+async function getChatIds(userId) {
+  const chats = await GroupChat.find({ participants: userId });
+  return chats.map((chat) => chat._id.toString());
+}

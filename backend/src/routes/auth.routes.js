@@ -11,9 +11,12 @@ import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
+// public routes
 router.post("/signup", signup);
 router.post("/verify-otp", verifyOtp);
 router.post("/login", login);
+
+// protected routes
 router.post("/logout", authenticateToken, logout);
 router.get("/users", authenticateToken, getUsers);
 router.get("/online-users", authenticateToken, getOnlineUsers);

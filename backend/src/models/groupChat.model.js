@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+// group chat schema (also used for private chats)
 const groupChatSchema = new mongoose.Schema(
   {
     isGroupChat: {

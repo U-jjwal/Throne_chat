@@ -1,6 +1,7 @@
 import { Message } from "../models/message.model.js";
 import { GroupChat } from "../models/groupChat.model.js";
 
+// check if user is a member of the chat
 const assertChatMember = async (chatId, userId) => {
   const chat = await GroupChat.findById(chatId);
   if (!chat) return { error: "Chat not found", status: 404 };
@@ -9,6 +10,7 @@ const assertChatMember = async (chatId, userId) => {
   return { chat };
 };
 
+// get messages for a chat with pagination
 export const getMessages = async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -40,7 +42,7 @@ export const getMessages = async (req, res) => {
   }
 };
 
-// Send message via REST (fallback)
+// send message via rest api
 export const sendMessage = async (req, res) => {
   try {
     const { chatId, text, media, messageType = "text" } = req.body;
@@ -52,6 +54,7 @@ export const sendMessage = async (req, res) => {
     const { error, status, chat } = await assertChatMember(chatId, req.user.id);
     if (error) return res.status(status).json({ message: error });
 
+    // create message
     const message = await Message.create({
       chatId,
       senderId: req.user.id,
@@ -65,7 +68,7 @@ export const sendMessage = async (req, res) => {
 
     await message.populate("senderId", "fullName avatar");
     
-    // Update chat's latest message
+    // update latest message in chat
     await GroupChat.findByIdAndUpdate(chatId, { latestMessage: message._id });
 
     res.status(201).json({ success: true, message });

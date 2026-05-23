@@ -1,11 +1,50 @@
 import Redis from "ioredis";
 
-export const redis = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: process.env.REDIS_PORT || 6379,
-});
+export const redis = new Redis(
+    process.env.REDIS_URL,
+    {
 
-// Handle Redis errors
-redis.on("error", (error) => {
-  console.error("Redis connection error:", error);
-});
+        maxRetriesPerRequest: null,
+
+        retryStrategy(times) {
+
+            return Math.min(
+                times * 50,
+                2000
+            );
+        },
+
+        enableReadyCheck: false,
+    }
+);
+
+redis.on(
+    "connect",
+    () => {
+
+        console.log(
+            "Redis Connected"
+        );
+    }
+);
+
+redis.on(
+    "ready",
+    () => {
+
+        console.log(
+            "Redis Ready"
+        );
+    }
+);
+
+redis.on(
+    "error",
+    (err) => {
+
+        console.log(
+            "Redis Error:",
+            err
+        );
+    }
+);

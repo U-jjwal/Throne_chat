@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// gmail smtp config
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -11,6 +12,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// verify mail server is ready
 transporter.verify((error, success) => {
   if (error) {
     console.log("Transport Error:", error);
@@ -19,6 +21,7 @@ transporter.verify((error, success) => {
   }
 });
 
+// send otp email to user
 export const sendOtpMail = async (email, otp) => {
   try {
     const info = await transporter.sendMail({

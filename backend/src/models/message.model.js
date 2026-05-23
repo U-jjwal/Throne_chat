@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+// message schema with delivery and read tracking
 const messageSchema = new mongoose.Schema(
   {
     chatId: {
