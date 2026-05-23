@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Modal,
   Alert,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import socketService from '../services/socket';
@@ -28,6 +29,18 @@ export default function ChatListScreen({ navigation }) {
   const [groupName, setGroupName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([fetchChats(), fetchUsers()]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -314,12 +327,19 @@ export default function ChatListScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* chat list */}
       <FlatList
         data={chats}
         renderItem={renderChat}
         keyExtractor={(item) => item._id}
         contentContainerStyle={chats.length === 0 && styles.emptyContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#667eea']}
+            tintColor="#667eea"
+          />
+        }
         ListEmptyComponent={() => (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyEmoji}>💬</Text>

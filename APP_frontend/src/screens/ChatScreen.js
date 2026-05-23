@@ -17,6 +17,7 @@ import {
   Dimensions,
   ScrollView,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -52,6 +53,23 @@ export default function ChatScreen({ navigation }) {
   const [typingUsers, setTypingUsers] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      if (selectedChatRef.current) {
+        await fetchMessages(selectedChatRef.current._id);
+      } else {
+        await Promise.all([fetchChats(), fetchUsers()]);
+      }
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchChats, fetchUsers]);
   
   const flatListRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -695,6 +713,14 @@ export default function ChatScreen({ navigation }) {
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
             onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.primary]}
+                tintColor={theme.primary}
+              />
+            }
           />
 
           {/* Typing Indicator */}
@@ -795,6 +821,14 @@ export default function ChatScreen({ navigation }) {
         keyExtractor={item => item._id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.chatList}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.primary]}
+            tintColor={theme.primary}
+          />
+        }
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No chats yet</Text>
