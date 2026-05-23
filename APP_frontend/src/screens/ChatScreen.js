@@ -49,6 +49,7 @@ export default function ChatScreen({ navigation }) {
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [groupStep, setGroupStep] = useState(1); // 1 = select members, 2 = enter name
   const [currentUser, setCurrentUser] = useState(null);
   const [typingUsers, setTypingUsers] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -391,9 +392,17 @@ export default function ChatScreen({ navigation }) {
     );
   };
 
+  const handleGroupNext = () => {
+    if (selectedUsers.length < 2) {
+      Alert.alert('Error', 'Please select at least 2 members first');
+      return;
+    }
+    setGroupStep(2); // advance to name entry step
+  };
+
   const createGroup = async () => {
     if (!groupName.trim()) {
-      Alert.alert('Error', 'Please enter group name');
+      Alert.alert('Error', 'Please enter a group name');
       return;
     }
     if (selectedUsers.length < 2) {
@@ -412,6 +421,7 @@ export default function ChatScreen({ navigation }) {
       setShowCreateGroup(false);
       setGroupName('');
       setSelectedUsers([]);
+      setGroupStep(1);
       Alert.alert('Success', 'Group created successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to create group');
@@ -898,25 +908,46 @@ export default function ChatScreen({ navigation }) {
 
       {/* Create Group Modal - WhatsApp Style */}
       <Modal visible={showCreateGroup} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
               <TouchableOpacity onPress={() => {
-                setShowCreateGroup(false);
-                setGroupName('');
-                setSelectedUsers([]);
+                if (groupStep === 2) {
+                  setGroupStep(1); // go back to member selection
+                } else {
+                  setShowCreateGroup(false);
+                  setGroupName('');
+                  setSelectedUsers([]);
+                  setGroupStep(1);
+                }
               }}>
-                <Text style={[styles.modalCancel, { color: theme.primary }]}>Cancel</Text>
-              </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>New Group</Text>
-              <TouchableOpacity onPress={createGroup}>
-                <Text style={[styles.modalNext, { color: selectedUsers.length >= 2 ? theme.primary : theme.textSecondary }]}>
-                  Next
+                <Text style={[styles.modalCancel, { color: theme.primary }]}>
+                  {groupStep === 2 ? 'Back' : 'Cancel'}
                 </Text>
               </TouchableOpacity>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                {groupStep === 1 ? `New Group (${selectedUsers.length} selected)` : 'Group Name'}
+              </Text>
+              {groupStep === 1 ? (
+                <TouchableOpacity onPress={handleGroupNext}>
+                  <Text style={[styles.modalNext, { color: selectedUsers.length >= 2 ? theme.primary : theme.textSecondary }]}>
+                    Next
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={createGroup}>
+                  <Text style={[styles.modalNext, { color: groupName.trim() ? theme.primary : theme.textSecondary }]}>
+                    Create
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
-            
-            {!groupName ? (
+
+            {groupStep === 1 ? (
+              // Step 1: select members
               <>
                 <View style={[styles.modalSearchContainer, { backgroundColor: theme.surface, margin: 12 }]}>
                   <Text style={styles.searchIcon}>🔍</Text>
@@ -928,7 +959,6 @@ export default function ChatScreen({ navigation }) {
                     onChangeText={setSearchQuery}
                   />
                 </View>
-                
                 <FlatList
                   data={filteredUsers}
                   renderItem={renderGroupUserItem}
@@ -937,45 +967,31 @@ export default function ChatScreen({ navigation }) {
                 />
               </>
             ) : (
-              <>
-                <View style={styles.selectedUsersContainer}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectedUsersScroll}>
-                    {selectedUsers.map(userId => {
-                      const user = users.find(u => u._id === userId);
-                      return (
-                        <View key={userId} style={styles.selectedUserChip}>
-                          <Text style={styles.selectedUserText}>{user?.fullName?.charAt(0)}</Text>
-                          <TouchableOpacity onPress={() => toggleUserSelection(userId)}>
-                            <Text style={styles.removeUser}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })}
-                    <TextInput
-                      style={[styles.groupNameInput, { color: theme.text }]}
-                      placeholder="Group subject"
-                      placeholderTextColor={theme.textSecondary}
-                      value={groupName}
-                      onChangeText={setGroupName}
-                      autoFocus
-                    />
-                  </ScrollView>
-                </View>
-                
-                <Text style={[styles.contactCount, { color: theme.textSecondary }]}>
-                  {filteredUsers.length} contacts
+              // Step 2: enter group name
+              <View style={{ padding: 20 }}>
+                <Text style={{ color: theme.textSecondary, marginBottom: 8, fontSize: 13 }}>
+                  {selectedUsers.length} members selected
                 </Text>
-                
-                <FlatList
-                  data={filteredUsers}
-                  renderItem={renderGroupUserItem}
-                  keyExtractor={item => item._id}
-                  showsVerticalScrollIndicator={false}
-                />
-              </>
+                <View style={[styles.modalSearchContainer, { backgroundColor: theme.surface }]}>
+                  <Text style={styles.searchIcon}>👥</Text>
+                  <TextInput
+                    style={[styles.groupNameInput, { color: theme.text, flex: 1 }]}
+                    placeholder="Enter group name..."
+                    placeholderTextColor={theme.textSecondary}
+                    value={groupName}
+                    onChangeText={setGroupName}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={createGroup}
+                  />
+                </View>
+                <Text style={{ color: theme.textSecondary, marginTop: 8, fontSize: 12 }}>
+                  Tap "Create" above when ready.
+                </Text>
+              </View>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
