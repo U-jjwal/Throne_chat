@@ -156,11 +156,9 @@ export default function ChatListScreen({ navigation }) {
 
   // logout user
   const handleLogout = async () => {
-    try {
-      await api.post('/auth/logout');
-    } catch (error) {
-      console.error('Logout error:', error.message);
-    }
+    // Fire and forget server-side logout so the local session clears instantly even on server hang
+    api.post('/auth/logout').catch((err) => console.error('Logout error:', err.message));
+
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');
     socketService.disconnect();

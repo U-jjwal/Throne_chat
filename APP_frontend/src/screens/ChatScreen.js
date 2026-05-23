@@ -95,6 +95,14 @@ export default function ChatScreen({ navigation }) {
 
     newSocket.on('connect', () => console.log('✅ Socket connected'));
     newSocket.on('disconnect', () => console.log('❌ Socket disconnected'));
+    newSocket.on('connect_error', async (err) => {
+      console.error('❌ Socket connection error:', err.message);
+      if (err.message === 'Invalid Token' || err.message === 'Unauthorized') {
+        Alert.alert('Session Expired', 'Please log in again to sync with the production server.');
+        await AsyncStorage.multiRemove(['token', 'user']);
+        navigation.replace('Login');
+      }
+    });
     newSocket.on('online_users', setOnlineUsers);
 
     newSocket.on('receive_message', (message) => {
@@ -148,6 +156,11 @@ export default function ChatScreen({ navigation }) {
         setTypingUsers(prev => ({ ...prev, [userId]: isTyping }));
         setTimeout(() => setTypingUsers(prev => ({ ...prev, [userId]: false })), 3000);
       }
+    });
+
+    newSocket.on('error', (err) => {
+      console.error('Socket Server Error:', err);
+      Alert.alert('Server Error', err.message || 'An error occurred on the server.');
     });
   };
 
@@ -317,7 +330,9 @@ export default function ChatScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.post('/auth/logout');
+              // Fire and forget server-side logout so the local session clears instantly even on server hang
+              api.post('/auth/logout').catch((err) => console.error('Server logout failed:', err));
+              
               await AsyncStorage.removeItem('token');
               await AsyncStorage.removeItem('user');
               socketService.disconnect();

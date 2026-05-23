@@ -1,8 +1,8 @@
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// your computer's local ip address
-const SOCKET_URL = 'http://10.168.117.221:3000';
+// Load socket url dynamically from env or default to local computer ip address
+const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || 'http://10.168.117.221:3000';
 
 class SocketService {
   constructor() {
@@ -24,7 +24,7 @@ class SocketService {
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
