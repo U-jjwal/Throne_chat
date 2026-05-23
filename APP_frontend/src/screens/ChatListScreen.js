@@ -12,6 +12,9 @@ import {
   Alert,
   StatusBar,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import socketService from '../services/socket';
@@ -289,7 +292,10 @@ export default function ChatListScreen({ navigation }) {
 
       {/* create group modal */}
       <Modal visible={showCreateGroup} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Create Group</Text>
@@ -298,21 +304,42 @@ export default function ChatListScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              style={styles.groupInput}
-              placeholder="Group Name"
-              value={groupName}
-              onChangeText={setGroupName}
-              placeholderTextColor="#999"
-            />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <View style={styles.groupNameSection}>
+                <Text style={styles.groupNameLabel}>Group Name</Text>
+                <TextInput
+                  style={styles.groupInput}
+                  placeholder="Enter group name..."
+                  value={groupName}
+                  onChangeText={setGroupName}
+                  placeholderTextColor="#999"
+                  autoFocus={true}
+                  returnKeyType="done"
+                />
+              </View>
 
-            <Text style={styles.sectionLabel}>Select Members (min 2)</Text>
-            <FlatList
-              data={otherUsers}
-              renderItem={renderUser}
-              keyExtractor={(item) => item._id}
-              style={{ maxHeight: 300 }}
-            />
+              <Text style={styles.sectionLabel}>
+                Select Members (min 2) — {selectedUsers.length} selected
+              </Text>
+
+              {otherUsers.map((item) => (
+                <TouchableOpacity
+                  key={item._id}
+                  style={[styles.userItem, selectedUsers.includes(item._id) && styles.userSelected]}
+                  onPress={() => toggleUserSelection(item._id)}
+                >
+                  <View style={styles.userAvatar}>
+                    <Text style={styles.avatarText}>{item.fullName?.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{item.fullName}</Text>
+                  </View>
+                  {selectedUsers.includes(item._id) && (
+                    <Text style={styles.checkMark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
             <TouchableOpacity
               style={[styles.createBtn, creatingGroup && { opacity: 0.6 }]}
@@ -320,11 +347,11 @@ export default function ChatListScreen({ navigation }) {
               disabled={creatingGroup}
             >
               <Text style={styles.createBtnText}>
-                {creatingGroup ? 'Creating...' : 'Create Group'}
+                {creatingGroup ? 'Creating...' : `Create Group${groupName.trim() ? ` "${groupName.trim()}"` : ''}`}
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <FlatList
@@ -488,14 +515,29 @@ const styles = StyleSheet.create({
     color: '#999',
     padding: 4,
   },
+  groupNameSection: {
+    padding: 16,
+    paddingBottom: 8,
+    backgroundColor: '#f8f9ff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  groupNameLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#667eea',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   groupInput: {
-    margin: 16,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    borderWidth: 1.5,
+    borderColor: '#667eea',
     borderRadius: 10,
     fontSize: 16,
     color: '#333',
+    backgroundColor: '#fff',
   },
   sectionLabel: {
     fontSize: 13,
