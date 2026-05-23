@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // load backend url dynamically from .env or default to local development ip address
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.168.117.221:3000/api/v1';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://thronechat-production.up.railway.app/api/v1';
 
 const api = axios.create({
   baseURL: API_URL,

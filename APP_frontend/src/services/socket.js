@@ -2,7 +2,7 @@ import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Load socket url dynamically from env or default to local computer ip address
-const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || 'http://10.168.117.221:3000';
+const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || 'https://thronechat-production.up.railway.app';
 
 class SocketService {
   constructor() {
