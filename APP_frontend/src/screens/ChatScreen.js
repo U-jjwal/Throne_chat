@@ -678,8 +678,8 @@ export default function ChatScreen({ navigation }) {
         
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : (StatusBar.currentHeight || 0) + 50}
         >
           {/* Chat Header */}
           <View style={[styles.chatHeader, { backgroundColor: theme.headerBackground, borderBottomColor: theme.border }]}>
@@ -731,7 +731,14 @@ export default function ChatScreen({ navigation }) {
           )}
 
           {/* Input Bar */}
-          <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
+          <View style={[
+            styles.inputContainer, 
+            { 
+              backgroundColor: theme.surface, 
+              borderTopColor: theme.border,
+              paddingBottom: Math.max(insets.bottom, 8)
+            }
+          ]}>
             <TouchableOpacity style={styles.attachButton} onPress={handlePickAndUploadFile}>
               <Text style={styles.attachIcon}>➕</Text>
             </TouchableOpacity>
