@@ -45,6 +45,7 @@ export const signup = async (req, res) => {
       message: "OTP sent to email successfully",
       email,
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -58,6 +59,7 @@ export const verifyOtp = async (req, res) => {
 
     // get signup data from redis
     const userData = await redis.get(`signup:${email}`);
+    
     if (!userData) {
       return res.status(400).json({ message: "OTP expired or invalid" });
     }
